@@ -1,0 +1,125 @@
+{% extends "bootstrap_5_layout.html" %}
+{% set active_page = "saved" %}
+
+{% block content %}
+<!--Used Claude Code for Inspiration-->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-0">{{ itinerary_data.title }}</h1>
+            <p class="text-muted mb-0">Created: {{ itinerary_data.created_at[:10] }}</p>
+        </div>
+        <form action="{{ url_for('main.delete', itinerary_id=itinerary_data.id) }}" method="post" onsubmit="return confirm('Permanently delete this itinerary?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash me-1"></i> Delete Trip
+            </button>
+        </form>
+    </div>
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body bg-light rounded">
+            <h6 class="text-uppercase text-muted fw-bold small">Original Prompt</h6>
+            <p class="mb-0 text-secondary italic">"{{ itinerary_data.prompt }}"</p>
+        </div>
+    </div>
+
+    <div id="activities-container">
+        {% set sections = itinerary_data.itinerary.split('STOP:') %}
+        {% for item in sections if item.strip() %}
+            {% if 'EXTRA TIPS' in item.upper() %}
+                <!-- Extra Tips Card (No Arrows) -->
+                <div class="card shadow-sm mb-3 extra-tips-card">
+                    <div class="card-body rounded">
+                        <h5><i class="bi bi-lightbulb-fill"></i> Extra Tips</h5>
+                        <div style="color: white; line-height: 1.8;">
+                            {{ item.replace('EXTRA TIPS', '').replace('Extra Tips', '').strip() | replace('\n', '<br>') | safe }}
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Regular Stop Card (With Arrows) -->
+                <div class="card shadow-sm mb-3 border-0 activity-card">
+                    <div class="card-body bg-light rounded d-flex align-items-start">
+                        <div class="d-flex flex-column me-3" style="margin-top: 5px;">
+                            <button type="button" class="btn btn-sm btn-link p-0 text-primary" onclick="moveUp(this)" title="Move up">
+                                <i class="bi bi-chevron-up fs-5"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-link p-0 text-primary" onclick="moveDown(this)" title="Move down">
+                                <i class="bi bi-chevron-down fs-5"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="flex-grow-1 editable-content" contenteditable="true">
+                            {{ item.strip() | replace('\n', '<br>') | safe }}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="card shadow-sm mt-4 border-0 border-top border-primary border-4">
+        <div class="card-body bg-light rounded">
+            <h5 class="fw-bold mb-3">Modify & Update</h5>
+            <form action="{{ url_for('main.save') }}" method="post" onsubmit="prepareSave()">
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <input type="text" name="title" class="form-control" value="{{ itinerary_data.title }} (Edited)" required>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-success w-100">Save as New Version</button>
+                    </div>
+                </div>
+                <input type="hidden" name="prompt" value="{{ itinerary_data.prompt }}">
+                <input type="hidden" name="itinerary" id="save_input">
+            </form>
+            
+            <div class="d-flex justify-content-between mt-3">
+                <a href="{{ url_for('main.saved') }}" class="btn btn-link text-decoration-none p-0">
+                    <i class="bi bi-arrow-left"></i> Back to All Saved
+                </a>
+                <form action="{{ url_for('main.regenerate', itinerary_id=itinerary_data.id) }}" method="post">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Regenerate Fresh AI Version
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function moveUp(btn) {
+            const card = btn.closest('.activity-card');
+            if (card.previousElementSibling && card.previousElementSibling.classList.contains('activity-card')) {
+                card.parentNode.insertBefore(card, card.previousElementSibling);
+            }
+        }
+
+        function moveDown(btn) {
+            const card = btn.closest('.activity-card');
+            if (card.nextElementSibling) {
+                const nextCard = card.nextElementSibling;
+                if (nextCard.classList.contains('activity-card')) {
+                    card.parentNode.insertBefore(nextCard, card);
+                }
+            }
+        }
+
+        function prepareSave() {
+            let result = "";
+            document.querySelectorAll('.activity-card').forEach(card => {
+                const content = card.querySelector('.editable-content').innerText.trim();
+                if (content) {
+                    result += "STOP: " + content + "\n\n";
+                }
+            });
+            const extraTips = document.querySelector('.extra-tips-card');
+            if (extraTips) {
+                const tipsContent = extraTips.querySelector('.card-body div').innerText.trim();
+                if (tipsContent) {
+                    result += "STOP: EXTRA TIPS\n" + tipsContent + "\n\n";
+                }
+            }
+            document.getElementById('save_input').value = result;
+        }
+    </script>
+{% endblock %}

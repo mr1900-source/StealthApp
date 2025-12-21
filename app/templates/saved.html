@@ -1,0 +1,54 @@
+{% extends "bootstrap_5_layout.html" %}
+{% set active_page = "saved" %}
+
+{% block content %}
+    <h1>Saved Itineraries</h1>
+    <p>Manage your saved travel plans.</p>
+
+    <hr>
+
+    {% if itineraries %}
+        <div class="row">
+            {% for item in itineraries %}
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-pin-map"></i> {{ item.title }}
+                        </h5>
+                        <p class="card-text">
+                            <small class="text-muted">Created: {{ item.created_at[:10] }}</small>
+                        </p>
+                        <p class="card-text">
+                            <strong>Original Prompt:</strong><br>
+                            {{ item.prompt[:150] }}{% if item.prompt|length > 150 %}...{% endif %}
+                        </p>
+                        
+                        <a href="{{ url_for('main.view', itinerary_id=item.id) }}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-eye"></i> View Full
+                        </a>
+                        
+                        <form action="{{ url_for('main.regenerate', itinerary_id=item.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-secondary btn-sm">
+                                <i class="bi bi-arrow-clockwise"></i> Regenerate
+                            </button>
+                        </form>
+                        
+                        <form action="{{ url_for('main.delete', itinerary_id=item.id) }}" method="post" class="d-inline" onsubmit="return confirm('Delete this itinerary?');">
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <h4>No Saved Itineraries Yet</h4>
+            <p>Start by <a href="{{ url_for('main.index') }}">creating your first itinerary</a>!</p>
+        </div>
+    {% endif %}
+
+{% endblock %}

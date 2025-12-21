@@ -1,0 +1,17 @@
+# this is the "requirements.txt" file...
+
+# web framework:
+Flask>=2.0
+
+# API and environment:
+python-dotenv>=0.20
+google-genai>=1.0.0
+
+# utilities:
+markupsafe>=2.1.0
+
+# testing:
+pytest>=7.0
+
+# production server:
+gunicorn>=20.1.0
