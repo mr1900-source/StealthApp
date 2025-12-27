@@ -1,78 +1,75 @@
-# QuickTrip - AI Itinerary Planner
+# Drift
 
-An AI-powered travel itinerary generator using Google's Gemini API. Create, customize, and save personalized travel itineraries!
+Turn saved ideas into real plans with friends.
 
-## Setup
+## Quick Start
 
-Clone the repo to download it from GitHub. Perhaps onto the Desktop.
+### Backend Setup
 
-Navigate to the repo using the command line.
-```sh
-cd ~/Desktop/YOUR-REPO-NAME
-```
+```bash
+cd backend
 
-Create a virtual environment:
-```sh
-conda create -n itinerary-app-env python=3.10
-```
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-Activate the virtual environment:
-```sh
-conda activate itinerary-app-env
-```
-
-Install package dependencies:
-```sh
+# Install dependencies
 pip install -r requirements.txt
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run the server
+uvicorn app.main:app --reload
 ```
 
-## Configuration
+API will be available at `http://localhost:8000`
+API docs at `http://localhost:8000/docs`
 
-The app requires a Google Gemini API key. Obtain a free Gemini API Key at [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+### Mobile Setup
 
-Create a local ".env" file and store your environment variables in there:
-```sh
-# this is the ".env" file...
+```bash
+cd mobile
 
-GEMINI_API_KEY="your_api_key_here"
-SECRET_KEY="your-secret-key-for-flask"
+# Install dependencies
+npm install
+
+# Start Expo
+npx expo start
 ```
 
-## Usage
+Scan the QR code with Expo Go app on your phone.
 
-### Web App
+### Running Tests
 
-Run the web app (then view in the browser at http://127.0.0.1:5000/):
-```sh
-python run.py
+```bash
+cd backend
+pytest -v
 ```
 
-### Using the App
+## Environment Variables
 
-1. Enter a travel prompt describing your trip (destination, duration, budget, interests)
-2. Click "Generate Itinerary" to create an AI-powered plan
-3. Edit stops by clicking on them
-4. Reorder activities using the up/down arrows
-5. Save your itinerary with a custom title
-6. View saved itineraries in the "Saved Itineraries" page
+Create a `.env` file in the backend directory:
 
-## Testing
-
-Run tests:
-```sh
-pytest
+```
+DATABASE_URL=sqlite:///./drift.db
+SECRET_KEY=your-secret-key-here
+GOOGLE_PLACES_API_KEY=your-google-api-key
 ```
 
-Run tests with verbose output:
-```sh
-pytest tests/ -v
-```
+## Tech Stack
 
-## Technologies
+- **Backend**: FastAPI, SQLAlchemy, SQLite/PostgreSQL
+- **Mobile**: React Native, Expo, TypeScript
+- **Auth**: JWT tokens
 
-- Flask (Python web framework)
-- Google Gemini API
-- Bootstrap 5
-- pytest
-- Render (deployment)
-- GitHub Actions (CI/CD)
+## MVP Features
+
+- [x] User authentication
+- [x] Create/save places and events
+- [x] Auto-parse Google Maps and event links
+- [x] Friend connections
+- [x] Feed of friends' saves
+- [x] "I'm down" interest signaling
+- [x] Match notifications
