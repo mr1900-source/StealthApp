@@ -1,27 +1,25 @@
-# Secrets
-.env
+# Dependencies
+node_modules/
 
-# Python
+# Expo
+.expo/
+dist/
+
+# Python cache
 __pycache__/
-*.py[cod]
 *.pyc
-
-# Virtual envs
+*.pyo
+*.db
 venv/
-.env/
-env/
 
-# Editor folders
-.vscode/
+# Environment
+.env
+*.log
+
+# IDE
 .idea/
+.vscode/
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Data storage
-saved_itineraries.json
-
-# Flask
-instance/
-.pytest_cache/
