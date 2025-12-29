@@ -15,7 +15,6 @@ import {
   TouchableOpacity,
   Alert,
   Keyboard,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,19 +63,33 @@ export default function NewSaveScreen() {
     try {
       const result = await savesApi.parseLink(linkToParse);
       
+      console.log('=== RAW API RESULT ===');
+      console.log('address:', result.address);
+      console.log('location_name:', result.location_name);
+      console.log('full result:', JSON.stringify(result, null, 2));
+
       if (result.success || result.title) {
-        setFormData(prev => ({
-          ...prev,
-          title: result.title || prev.title,
-          description: result.description || prev.description,
-          category: result.category || prev.category,
-          location_name: result.location_name || prev.location_name,
-          location_lat: result.location_lat || prev.location_lat,
-          location_lng: result.location_lng || prev.location_lng,
-          source_url: linkToParse,
-          source_type: result.source_type,
-          image_url: result.image_url || prev.image_url,
-        }));
+        setFormData(prev => {
+          // Build location string - prefer location_name, then address, then coordinates
+          let locationValue = result.location_name || result.address || prev.location_name;
+          if (!locationValue && result.location_lat && result.location_lng) {
+            locationValue = `📍 ${result.location_lat.toFixed(5)}, ${result.location_lng.toFixed(5)}`;
+          }
+          
+          return {
+            ...prev,
+            title: result.title || prev.title,
+            description: result.description || prev.description,
+            category: result.category || prev.category,
+            location_name: locationValue,
+            address: result.address || prev.address,
+            location_lat: result.location_lat || prev.location_lat,
+            location_lng: result.location_lng || prev.location_lng,
+            source_url: linkToParse,
+            source_type: result.source_type,
+            image_url: result.image_url || prev.image_url,
+          };
+        });
       }
       
       if (result.error) {

@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import create_tables
 from .routers import auth_router, saves_router, friends_router, interests_router
+from dotenv import load_dotenv
+load_dotenv()
 
 # Create FastAPI app
 app = FastAPI(
