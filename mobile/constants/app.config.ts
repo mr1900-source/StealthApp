@@ -11,7 +11,7 @@ export const APP_CONFIG = {
   tagline: 'Turn ideas into plans',
   
   // URLs
-  apiUrl: 'http://localhost:8000',
+  apiUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000',
   
   // App Store / Play Store
   appStoreId: '',
