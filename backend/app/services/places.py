@@ -1,128 +1,149 @@
+"""
+Places Autocomplete Service
+
+Google Places API with caching.
+"""
+
 import httpx
-from typing import Optional, Dict, Any, List
-from ..config import get_settings
+import json
+import os
+from datetime import datetime, timedelta
+from typing import Optional
+from sqlalchemy.orm import Session
 
-settings = get_settings()
+from app.models.models import Cache
+from app.schemas.schemas import PlacesAutocompleteResponse, PlaceResult
 
 
-class PlacesService:
-    """Service for interacting with Google Places API."""
+GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
+CACHE_TTL_HOURS = 24
+
+
+async def places_autocomplete(
+    query: str,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    db: Session = None
+) -> PlacesAutocompleteResponse:
+    """
+    Search for places using Google Places API.
+    Results are cached for 24 hours.
+    """
     
-    BASE_URL = "https://maps.googleapis.com/maps/api/place"
+    if not GOOGLE_PLACES_API_KEY:
+        print("Warning: GOOGLE_PLACES_API_KEY not set")
+        return PlacesAutocompleteResponse(results=[])
     
-    @classmethod
-    async def search_nearby(
-        cls,
-        lat: float,
-        lng: float,
-        radius: int = 1000,
-        keyword: Optional[str] = None,
-        place_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Search for places near a location."""
-        if not settings.google_places_api_key:
-            return []
-        
-        params = {
-            "location": f"{lat},{lng}",
-            "radius": radius,
-            "key": settings.google_places_api_key
-        }
-        
-        if keyword:
-            params["keyword"] = keyword
-        if place_type:
-            params["type"] = place_type
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{cls.BASE_URL}/nearbysearch/json",
-                    params=params,
-                    timeout=10
-                )
-                data = response.json()
-                
-                if data.get("status") == "OK":
-                    return data.get("results", [])
-                return []
-                
-        except Exception:
-            return []
+    # Build cache key
+    cache_key = f"places:{query}:{lat}:{lng}"
     
-    @classmethod
-    async def get_place_details(cls, place_id: str) -> Optional[Dict[str, Any]]:
-        """Get detailed info about a specific place."""
-        if not settings.google_places_api_key:
-            return None
+    # Check cache
+    if db:
+        cached = db.query(Cache).filter(
+            Cache.cache_key == cache_key,
+            Cache.expires_at > datetime.utcnow()
+        ).first()
         
-        params = {
-            "place_id": place_id,
-            "fields": "name,formatted_address,geometry,photos,types,rating,price_level,opening_hours",
-            "key": settings.google_places_api_key
-        }
-        
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{cls.BASE_URL}/details/json",
-                    params=params,
-                    timeout=10
-                )
-                data = response.json()
-                
-                if data.get("status") == "OK":
-                    return data.get("result")
-                return None
-                
-        except Exception:
-            return None
+        if cached:
+            try:
+                results = json.loads(cached.cache_value)
+                return PlacesAutocompleteResponse(results=[PlaceResult(**r) for r in results])
+            except:
+                pass
     
-    @classmethod
-    async def autocomplete(
-        cls,
-        query: str,
-        lat: Optional[float] = None,
-        lng: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
-        """Get place autocomplete suggestions."""
-        if not settings.google_places_api_key:
-            return []
-        
+    # Call Google Places API
+    try:
+        url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
         params = {
             "input": query,
-            "key": settings.google_places_api_key
+            "key": GOOGLE_PLACES_API_KEY,
+            "types": "establishment|geocode",
         }
         
+        # Add location bias if provided
         if lat and lng:
             params["location"] = f"{lat},{lng}"
-            params["radius"] = 50000  # 50km bias
+            params["radius"] = "50000"  # 50km radius
         
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{cls.BASE_URL}/autocomplete/json",
-                    params=params,
-                    timeout=10
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+            data = response.json()
+        
+        if data.get("status") != "OK":
+            print(f"Places API error: {data.get('status')}")
+            return PlacesAutocompleteResponse(results=[])
+        
+        # Parse results
+        results = []
+        for prediction in data.get("predictions", [])[:5]:
+            result = PlaceResult(
+                place_id=prediction.get("place_id", ""),
+                name=prediction.get("structured_formatting", {}).get("main_text", prediction.get("description", "")),
+                address=prediction.get("description", ""),
+            )
+            results.append(result)
+        
+        # Get place details for lat/lng (optional, adds API calls)
+        # For MVP, skip this to save costs
+        
+        # Cache results
+        if db and results:
+            cache_entry = db.query(Cache).filter(Cache.cache_key == cache_key).first()
+            
+            if cache_entry:
+                cache_entry.cache_value = json.dumps([r.model_dump() for r in results])
+                cache_entry.expires_at = datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
+            else:
+                cache_entry = Cache(
+                    cache_key=cache_key,
+                    cache_value=json.dumps([r.model_dump() for r in results]),
+                    expires_at=datetime.utcnow() + timedelta(hours=CACHE_TTL_HOURS)
                 )
-                data = response.json()
-                
-                if data.get("status") == "OK":
-                    return data.get("predictions", [])
-                return []
-                
-        except Exception:
-            return []
-    
-    @classmethod
-    def get_photo_url(cls, photo_reference: str, max_width: int = 400) -> str:
-        """Generate a URL for a place photo."""
-        if not settings.google_places_api_key:
-            return ""
+                db.add(cache_entry)
+            
+            db.commit()
         
-        return (
-            f"{cls.BASE_URL}/photo"
-            f"?maxwidth={max_width}"
-            f"&photo_reference={photo_reference}"
-            f"&key={settings.google_places_api_key}"
-        )
+        return PlacesAutocompleteResponse(results=results)
+        
+    except Exception as e:
+        print(f"Places API error: {e}")
+        return PlacesAutocompleteResponse(results=[])
+
+
+async def get_place_details(place_id: str) -> Optional[dict]:
+    """
+    Get detailed place information including lat/lng.
+    Use sparingly - costs more API calls.
+    """
+    
+    if not GOOGLE_PLACES_API_KEY:
+        return None
+    
+    try:
+        url = "https://maps.googleapis.com/maps/api/place/details/json"
+        params = {
+            "place_id": place_id,
+            "key": GOOGLE_PLACES_API_KEY,
+            "fields": "name,formatted_address,geometry",
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+            data = response.json()
+        
+        if data.get("status") != "OK":
+            return None
+        
+        result = data.get("result", {})
+        location = result.get("geometry", {}).get("location", {})
+        
+        return {
+            "name": result.get("name", ""),
+            "address": result.get("formatted_address", ""),
+            "lat": location.get("lat"),
+            "lng": location.get("lng"),
+        }
+        
+    except Exception as e:
+        print(f"Place details error: {e}")
+        return None

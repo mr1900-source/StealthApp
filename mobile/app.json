@@ -2,31 +2,36 @@
   "expo": {
     "name": "Drift",
     "slug": "drift",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "drift",
     "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#6366F1"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.drift.app"
     },
     "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#6366F1"
+      },
       "package": "com.drift.app"
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-font"
-    ],
-    "experiments": {
-      "typedRoutes": true
-    }
+    ]
   }
 }
