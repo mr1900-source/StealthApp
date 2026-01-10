@@ -1,104 +1,83 @@
 /**
  * Auth Context
  * 
- * Manages authentication state throughout the app.
- * Provides login, logout, and user info to all components.
+ * Global authentication state.
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, LoginCredentials, SignupData } from '@/types';
-import { authApi } from '@/services/api';
+import api, { User, getToken } from '@/services/api';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  isLoggedIn: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
-  signup: (data: SignupData) => Promise<void>;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, username?: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check auth status on mount
   useEffect(() => {
-    checkAuthStatus();
+    checkAuth();
   }, []);
 
-  async function checkAuthStatus() {
+  async function checkAuth() {
     try {
-      const loggedIn = await authApi.isLoggedIn();
-      if (loggedIn) {
-        const userData = await authApi.getMe();
+      const token = await getToken();
+      if (token) {
+        const userData = await api.auth.getMe();
         setUser(userData);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.log('Not authenticated');
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function login(credentials: LoginCredentials) {
-    setIsLoading(true);
-    try {
-      const userData = await authApi.login(credentials);
-      setUser(userData);
-    } finally {
-      setIsLoading(false);
-    }
+  async function login(email: string, password: string) {
+    await api.auth.login(email, password);
+    const userData = await api.auth.getMe();
+    setUser(userData);
   }
 
-  async function signup(data: SignupData) {
-    setIsLoading(true);
-    try {
-      const userData = await authApi.signup(data);
-      setUser(userData);
-    } finally {
-      setIsLoading(false);
-    }
+  async function signup(email: string, password: string, username?: string, name?: string) {
+    await api.auth.signup(email, password, username, name);
+    await login(email, password);
   }
 
   async function logout() {
-    setIsLoading(true);
-    try {
-      await authApi.logout();
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+    await api.auth.logout();
+    setUser(null);
   }
 
   async function refreshUser() {
     try {
-      const userData = await authApi.getMe();
+      const userData = await api.auth.getMe();
       setUser(userData);
     } catch (error) {
-      console.error('Failed to refresh user:', error);
+      setUser(null);
     }
   }
 
-  const value: AuthContextType = {
-    user,
-    isLoading,
-    isLoggedIn: !!user,
-    login,
-    signup,
-    logout,
-    refreshUser,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAuthenticated: !!user,
+        login,
+        signup,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

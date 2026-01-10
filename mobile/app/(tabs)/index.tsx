@@ -1,196 +1,311 @@
 /**
- * Feed Screen
+ * Ideas Tab - Home Feed
  * 
- * Shows saves from friends.
+ * Personal repository of inspiration.
+ * Shows all ideas user created or is in audience for.
+ * 
+ * Filters: All, Shared with me, By group
+ * Category filters
+ * Map toggle (future)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  SafeAreaView,
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
   FlatList,
+  TouchableOpacity,
+  StyleSheet,
   RefreshControl,
-  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { colors } from '@/theme/colors';
-import { textStyles } from '@/theme/typography';
-import { spacing, layout } from '@/theme/spacing';
-import { SaveCard } from '@/components';
-import { friendsApi } from '@/services/api';
-import { Save } from '@/types';
-import { APP_CONFIG } from '@/constants/app.config';
+import { useFocusEffect, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, CATEGORIES } from '@/constants/config';
+import api, { IdeaCard as IdeaCardType, Group } from '@/services/api';
+import IdeaCard from '@/components/IdeaCard';
 
-export default function FeedScreen() {
-  const router = useRouter();
-  const [saves, setSaves] = useState<Save[]>([]);
+type FilterType = 'all' | 'shared_with_me' | 'group';
+
+export default function IdeasScreen() {
+  const [ideas, setIdeas] = useState<IdeaCardType[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Filters
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const loadFeed = useCallback(async (showLoader = true) => {
-    if (showLoader) setIsLoading(true);
-    setError(null);
-    
+  const loadData = async () => {
     try {
-      const feed = await friendsApi.getFeed();
-      setSaves(feed);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load feed');
+      // Load groups for filter dropdown
+      const groupsData = await api.groups.getMyGroups();
+      setGroups(groupsData);
+      
+      // Load feed based on filters
+      const feedData = await api.feed.getHomeFeed({
+        filter_type: filterType,
+        group_id: filterType === 'group' ? selectedGroupId || undefined : undefined,
+        category: selectedCategory || undefined,
+      });
+      setIdeas(feedData.ideas);
+    } catch (error) {
+      console.error('Failed to load ideas:', error);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
-  }, []);
-
-  useEffect(() => {
-    loadFeed();
-  }, [loadFeed]);
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    loadFeed(false);
   };
 
-  const handleSavePress = (save: Save) => {
-    router.push(`/save/${save.id}`);
-  };
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>👀</Text>
-      <Text style={styles.emptyTitle}>Your feed is empty</Text>
-      <Text style={styles.emptySubtitle}>
-        Add friends to see what they're saving!
-      </Text>
-    </View>
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [filterType, selectedGroupId, selectedCategory])
   );
+
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await loadData();
+    setIsRefreshing(false);
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.logo}>{APP_CONFIG.name}</Text>
+      {/* Main filters */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterRow}
+        contentContainerStyle={styles.filterContent}
+      >
+        <FilterChip 
+          label="All" 
+          active={filterType === 'all'} 
+          onPress={() => { setFilterType('all'); setSelectedGroupId(null); }} 
+        />
+        <FilterChip 
+          label="Shared with me" 
+          active={filterType === 'shared_with_me'} 
+          onPress={() => { setFilterType('shared_with_me'); setSelectedGroupId(null); }} 
+        />
+        {groups.map(group => (
+          <FilterChip
+            key={group.id}
+            label={group.name}
+            active={filterType === 'group' && selectedGroupId === group.id}
+            onPress={() => { setFilterType('group'); setSelectedGroupId(group.id); }}
+          />
+        ))}
+      </ScrollView>
+      
+      {/* Category filters */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryRow}
+        contentContainerStyle={styles.filterContent}
+      >
+        <CategoryChip 
+          label="All" 
+          active={selectedCategory === null} 
+          onPress={() => setSelectedCategory(null)} 
+        />
+        {CATEGORIES.map(cat => (
+          <CategoryChip
+            key={cat.id}
+            label={cat.label}
+            icon={cat.icon}
+            color={cat.color}
+            active={selectedCategory === cat.id}
+            onPress={() => setSelectedCategory(cat.id)}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        {renderHeader()}
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {renderHeader()}
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading ideas...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {renderHeader()}
-      
+    <View style={styles.container}>
       <FlatList
-        data={saves}
+        data={ideas}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <SaveCard 
-            save={item} 
-            onPress={() => handleSavePress(item)}
+          <IdeaCard 
+            idea={item} 
+            onPress={() => router.push(`/idea/${item.id}`)}
           />
         )}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="bulb-outline" size={48} color={COLORS.textTertiary} />
+            <Text style={styles.emptyTitle}>No ideas yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap the + button to save your first idea
+            </Text>
+          </View>
+        }
         contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={renderEmptyState}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
       />
-    </SafeAreaView>
+    </View>
+  );
+}
+
+function FilterChip({ 
+  label, 
+  active, 
+  onPress 
+}: { 
+  label: string; 
+  active: boolean; 
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.filterChip, active && styles.filterChipActive]}
+      onPress={onPress}
+    >
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function CategoryChip({ 
+  label, 
+  icon,
+  color,
+  active, 
+  onPress 
+}: { 
+  label: string;
+  icon?: string;
+  color?: string;
+  active: boolean; 
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.categoryChip, 
+        active && { backgroundColor: color || COLORS.primary, borderColor: color || COLORS.primary }
+      ]}
+      onPress={onPress}
+    >
+      {icon && (
+        <Ionicons 
+          name={icon as any} 
+          size={14} 
+          color={active ? '#FFF' : color || COLORS.textSecondary} 
+        />
+      )}
+      <Text style={[
+        styles.categoryChipText, 
+        active && styles.categoryChipTextActive
+      ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: COLORS.background,
   },
-  
-  // Header
-  header: {
-    paddingHorizontal: layout.screenPaddingHorizontal,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  logo: {
-    ...textStyles.h2,
-    color: colors.primary,
-  },
-  
-  // List
-  listContent: {
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxxl,
-    flexGrow: 1,
-  },
-  
-  // Loading
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  
-  // Error
-  errorContainer: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
   },
-  errorText: {
-    ...textStyles.body,
-    color: colors.error,
-    textAlign: 'center',
+  loadingText: {
+    color: COLORS.textSecondary,
   },
-  
-  // Empty state
+  header: {
+    paddingBottom: 8,
+  },
+  filterRow: {
+    marginBottom: 8,
+  },
+  categoryRow: {
+    marginBottom: 8,
+  },
+  filterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  filterChipTextActive: {
+    color: '#FFF',
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+    gap: 4,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  categoryChipTextActive: {
+    color: '#FFF',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
   emptyState: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xxl,
-    marginTop: spacing.xxxl,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: spacing.lg,
+    paddingVertical: 60,
   },
   emptyTitle: {
-    ...textStyles.h3,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 16,
   },
   emptySubtitle: {
-    ...textStyles.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
   },
 });
